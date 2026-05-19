@@ -4,10 +4,15 @@ Python port of @p-vbordei/agent-launch.
 """
 
 from agent_launch.config import (
+    HnPlatform,
     LaunchConfig,
     LaunchConfigError,
+    LinkedinPlatform,
+    MastodonPlatform,
     Platform,
     Project,
+    RedditPlatform,
+    XPlatform,
     load_launch_config,
 )
 from agent_launch.context import ContextError, GatheredContext, gather_context
@@ -20,11 +25,16 @@ __all__ = [
     "ContextError",
     "DraftResult",
     "GatheredContext",
+    "HnPlatform",
     "LaunchConfig",
     "LaunchConfigError",
+    "LinkedinPlatform",
+    "MastodonPlatform",
     "Platform",
     "PlatformTemplate",
     "Project",
+    "RedditPlatform",
+    "XPlatform",
     "draft_one",
     "gather_context",
     "list_platforms",

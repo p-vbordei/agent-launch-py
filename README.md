@@ -1,12 +1,19 @@
 # agent-launch (Python)
 
 [![CI](https://github.com/p-vbordei/agent-launch-py/actions/workflows/ci.yml/badge.svg)](https://github.com/p-vbordei/agent-launch-py/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/agent-launch.svg)](https://pypi.org/project/agent-launch/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![Spec](https://img.shields.io/badge/spec-v0.1-blue)](./SPEC.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 
-> Draft platform-native release announcements (HN, Reddit, X, Mastodon, LinkedIn) from your repo's CHANGELOG + README + recent commits. **v0.1: drafts only — you post.**
+> **Idiomatic Python port of [@p-vbordei/agent-launch](https://www.npmjs.com/package/@p-vbordei/agent-launch).** Draft platform-native release announcements (HN, Reddit, X, Mastodon, LinkedIn) from your repo's CHANGELOG + README. v0.1: drafts only — you post. Output is **textually identical** to the TS reference when given the same inputs.
 
-Python port of [@p-vbordei/agent-launch](https://github.com/p-vbordei/agent-launch). Behaviour-compatible: same `launch.yaml` schema, same prompt templates, same per-platform length caps, same conformance clauses (C1–C5, S2/S4/S5).
+## What's in the box
+
+- `draft_one(platform, project, context, repo, anthropic)` — produce a platform-tuned post draft
+- Platforms: `hn`, `reddit`, `x`, `mastodon`, `linkedin`
+- `gather_context(cwd, version)` — collect CHANGELOG section + README + recent commits
+- `load_launch_config(path)` — strict pydantic-validated `launch.yaml`
+- CLI: `agent-launch draft <version> [--platforms hn,x] [--out drafts/]`
+- Strict input validation — no surprises in output
 
 ## Install
 
@@ -16,70 +23,64 @@ pip install agent-launch
 uv add agent-launch
 ```
 
-## Use
+## Quickstart
+
+CLI (run inside any repo with a CHANGELOG.md, README.md, and `launch.yaml`):
 
 ```bash
 cp launch.yaml.example launch.yaml && $EDITOR launch.yaml
-agent-launch context 0.2.0                        # debug: print the gathered context
-ANTHROPIC_API_KEY=... agent-launch draft 0.2.0    # → launches/v0.2.0/{hn,reddit-*,x,mastodon,linkedin}.md
-agent-launch draft 0.2.0 --platforms hn,x         # only specific platforms
-agent-launch draft 0.2.0 --out drafts/            # custom output dir (must be inside cwd)
+ANTHROPIC_API_KEY=... agent-launch draft 0.2.0
+# → launches/v0.2.0/{hn,reddit-*,x,mastodon,linkedin}.md
 ```
 
-Each draft is platform-native: HN's "Show HN" pattern, Reddit's subreddit etiquette, X's threaded format, Mastodon's longer-form toot, LinkedIn's slightly-more-business voice. Anti-examples (`revolutionary`, `game-changing`, the em-dash AI-cliche pattern, etc.) are baked into every prompt.
+Library (offline — uses a scripted fake Anthropic client):
 
-## Why drafts only in v0.1
-
-- HN explicitly forbids automated submissions.
-- Reddit's API allows posting but rate limits + subreddit moderation make automation fragile.
-- The hard part is "well-written platform-native copy informed by the actual repo." That's what v0.1 ships.
-- Posting on user approval is v0.2. Reply monitoring is v0.3.
-
-## Programmatic API
-
-```python
-import asyncio
-from anthropic import AsyncAnthropic
-
-from agent_launch import (
-    gather_context, load_launch_config, draft_one,
-)
-
-async def main() -> None:
-    cfg = load_launch_config("launch.yaml")
-    ctx = gather_context(".", "0.2.0")
-    client = AsyncAnthropic()  # reads ANTHROPIC_API_KEY
-
-    class Adapter:
-        class messages:
-            @staticmethod
-            async def create(params): return await client.messages.create(**params)
-
-    for platform in cfg.platforms:
-        result = await draft_one(
-            platform=platform,
-            project=cfg.project,
-            context=ctx,
-            repo=cfg.context.repo,
-            anthropic=Adapter(),
-        )
-        print(platform.kind, result.length, result.capped)
-
-asyncio.run(main())
+```bash
+python examples/quickstart.py
 ```
+
+See [`examples/quickstart.py`](examples/quickstart.py) for the 40-line walkthrough.
+
+## How it relates
+
+| Repo | Lang | Install |
+|---|---|---|
+| [`agent-launch`](https://github.com/p-vbordei/agent-launch) | TypeScript (reference) | `npm i -g @p-vbordei/agent-launch` |
+| [`agent-launch-py`](https://github.com/p-vbordei/agent-launch-py) | Python (this repo) | `pip install agent-launch` |
+| [`agent-launch-rs`](https://github.com/p-vbordei/agent-launch-rs) | Rust | `cargo install agent-launch` |
+
+All three share the same `launch.yaml` schema, the same vendored prompt templates, and the same conformance clauses.
 
 ## Conformance
 
-The TypeScript reference defines five conformance clauses (see [SPEC.md](./SPEC.md) §6). All pass here:
+```bash
+uv sync --extra dev
+uv run pytest -v
+```
+
+The TS reference defines five conformance clauses (see [SPEC.md](./SPEC.md) §6). All pass here:
 
 - **C1 — Determinism.** Same inputs → same output (with `temperature=0` and a scripted client, byte-identical).
-- **C2 — Length caps.** Per-platform caps enforced with up to 2 retries; over-cap drafts are still written but marked `capped: false`.
+- **C2 — Length caps.** Per-platform caps enforced with up to 2 retries; over-cap drafts marked `capped: false`.
 - **C3 — Repo URL.** Every draft body contains the GitHub URL.
 - **C4 — No secrets / declared fields only.** Env-var values are never echoed; `DraftResult` exposes only declared fields.
 - **C5 — Strict `launch.yaml`.** Missing/extra/invalid fields fail fast with a clear error.
 
-Plus security clauses **S2** (no `tools` field in the Anthropic call — model has no shell access), **S4** (no sockets opened during drafting), **S5** (`--out` sandboxed under cwd).
+Plus security clauses **S2** (no `tools` field in the Anthropic call — model has no shell access), **S4** (no sockets opened during drafting with a scripted client), **S5** (`--out` sandboxed under cwd).
+
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md).
+
+## Development
+
+```bash
+git clone https://github.com/p-vbordei/agent-launch-py
+cd agent-launch-py
+uv sync --extra dev
+uv run pytest -v
+```
 
 ## License
 
-[Apache 2.0](./LICENSE)
+Apache-2.0
